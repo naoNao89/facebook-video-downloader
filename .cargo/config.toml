@@ -1,0 +1,37 @@
+[build]
+# Use all available CPU cores for parallel compilation
+jobs = 8
+
+# Use faster linker and optimized flags for macOS
+[target.x86_64-apple-darwin]
+rustflags = ["-C", "target-cpu=native", "-C", "codegen-units=256"]
+
+[target.aarch64-apple-darwin]
+rustflags = ["-C", "target-cpu=apple-m1", "-C", "codegen-units=256"]
+
+# Optimize for faster incremental builds
+[profile.dev]
+# Reduce optimization for faster compilation
+opt-level = 0
+# Keep debug info but reduce it
+debug = 1
+# More codegen units for parallel compilation
+codegen-units = 256
+# Disable overflow checks for speed
+overflow-checks = false
+# Use faster but less optimized incremental compilation
+incremental = true
+
+# Fast release profile for testing
+[profile.dev-optimized]
+inherits = "dev"
+opt-level = 1
+debug = 1
+codegen-units = 16
+
+# Environment variables for Rust compilation
+[env]
+# Enable parallel frontend (requires nightly, but we'll set it anyway)
+RUSTFLAGS = "-Z threads=8"
+# Use faster allocator
+CARGO_PROFILE_DEV_BUILD_OVERRIDE_OPT_LEVEL = "0"

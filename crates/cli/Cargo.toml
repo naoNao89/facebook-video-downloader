@@ -1,0 +1,31 @@
+[package]
+name = "facebook-video-downloader-cli"
+version = "0.1.0"
+edition = "2021"
+description = "Command-line tools for Facebook video downloader"
+
+[[bin]]
+name = "anti-blocking-cli"
+path = "src/bin/anti_blocking.rs"
+
+[[bin]]
+name = "extraction-cli"
+path = "src/bin/extraction.rs"
+
+[[bin]]
+name = "test-real-ipv6"
+path = "src/bin/test_real_ipv6.rs"
+
+[[bin]]
+name = "anti-blocking-new"
+path = "src/bin/anti_blocking_new.rs"
+
+[dependencies]
+facebook-video-downloader-core = { path = "../core" }
+clap = { version = "4.0", features = ["derive"] }
+tokio = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = "0.3"
+serde_json = { workspace = true }
+reqwest = { workspace = true }
+anyhow = "1.0"

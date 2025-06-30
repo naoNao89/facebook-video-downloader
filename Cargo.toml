@@ -1,0 +1,284 @@
+[package]
+name = "facebook-video-downloader-frontend"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+
+
+
+# Test binaries organized in /tests directory (non-WASM only)
+
+# Thumbnail tests
+[[bin]]
+name = "test_thumbnail_debug"
+path = "tests/thumbnail/test_thumbnail_debug.rs"
+required-features = ["debug-tools"]
+
+[[bin]]
+name = "test_comprehensive_thumbnail_strategies"
+path = "tests/thumbnail/test_comprehensive_thumbnail_strategies.rs"
+required-features = ["debug-tools"]
+
+[[bin]]
+name = "test_all_thumbnail_cases"
+path = "tests/thumbnail/test_all_thumbnail_cases.rs"
+required-features = ["debug-tools"]
+
+[[bin]]
+name = "test_cli_thumbnail_extraction"
+path = "tests/thumbnail/test_cli_thumbnail_extraction.rs"
+required-features = ["debug-tools"]
+
+[[bin]]
+name = "test_thumbnail_download"
+path = "tests/thumbnail/test_thumbnail_download.rs"
+required-features = ["debug-tools"]
+
+[[bin]]
+name = "test_thumbnail_fallback_fix"
+path = "tests/thumbnail/test_thumbnail_fallback_fix.rs"
+required-features = ["debug-tools"]
+
+[[bin]]
+name = "test_thumbnail_fix_verification"
+path = "tests/thumbnail/test_thumbnail_fix_verification.rs"
+required-features = ["debug-tools"]
+
+[[bin]]
+name = "test_thumbnail_with_headers"
+path = "tests/thumbnail/test_thumbnail_with_headers.rs"
+required-features = ["debug-tools"]
+
+# Extraction tests (consolidated and refactored)
+[[bin]]
+name = "comprehensive_extraction_test"
+path = "tests/extraction/comprehensive_extraction_test.rs"
+required-features = ["debug-tools"]
+
+[[bin]]
+name = "core_extraction_test"
+path = "tests/extraction/core_extraction_test.rs"
+required-features = ["debug-tools"]
+
+[[bin]]
+name = "auth_and_error_test"
+path = "tests/extraction/auth_and_error_test.rs"
+required-features = ["debug-tools"]
+
+# Unit tests
+[[bin]]
+name = "test_url_validation"
+path = "tests/unit/test_url_validation.rs"
+required-features = ["debug-tools"]
+
+[[bin]]
+name = "test_facebook_url"
+path = "tests/unit/test_facebook_url.rs"
+required-features = ["debug-tools"]
+
+[[bin]]
+name = "test_new_url_format"
+path = "tests/unit/test_new_url_format.rs"
+required-features = ["debug-tools"]
+
+[[bin]]
+name = "test_specific_url"
+path = "tests/unit/test_specific_url.rs"
+required-features = ["debug-tools"]
+
+[[bin]]
+name = "test_title_parsing"
+path = "tests/unit/test_title_parsing.rs"
+required-features = ["debug-tools"]
+
+[[bin]]
+name = "test_duration_extraction"
+path = "tests/unit/test_duration_extraction.rs"
+required-features = ["debug-tools"]
+
+[[bin]]
+name = "test_facebook_reels_metadata"
+path = "tests/unit/test_facebook_reels_metadata.rs"
+required-features = ["debug-tools"]
+
+[[bin]]
+name = "debug_title_author_extraction"
+path = "tests/debug/debug_title_author_extraction.rs"
+required-features = ["debug-tools"]
+
+[[bin]]
+name = "test_tauri_extraction"
+path = "tests/debug/test_tauri_extraction.rs"
+required-features = ["debug-tools"]
+
+[[bin]]
+name = "debug_url_validation"
+path = "tests/debug/test_url_validation.rs"
+required-features = ["debug-tools"]
+
+[[bin]]
+name = "test_enhanced_thumbnail_extraction"
+path = "tests/unit/test_enhanced_thumbnail_extraction.rs"
+required-features = ["debug-tools"]
+
+[[bin]]
+name = "test_accurate_file_size"
+path = "tests/unit/test_accurate_file_size.rs"
+required-features = ["debug-tools"]
+
+# Integration tests
+[[bin]]
+name = "test_auth_bypass"
+path = "tests/integration/test_auth_bypass.rs"
+required-features = ["debug-tools"]
+
+[[bin]]
+name = "test_extract_button"
+path = "tests/integration/test_extract_button.rs"
+required-features = ["debug-tools"]
+
+[[bin]]
+name = "test_real_duration_extraction"
+path = "tests/integration/test_real_duration_extraction.rs"
+required-features = ["debug-tools"]
+
+[[bin]]
+name = "test_duration_integration"
+path = "tests/integration/test_duration_integration.rs"
+required-features = ["debug-tools"]
+
+[[bin]]
+name = "test_accurate_file_size_integration"
+path = "tests/integration/test_accurate_file_size_integration.rs"
+required-features = ["debug-tools"]
+
+[[bin]]
+name = "test_file_size_comparison"
+path = "tests/integration/test_file_size_comparison.rs"
+required-features = ["debug-tools"]
+
+# Debug tools
+[[bin]]
+name = "debug_thumbnail_cli"
+path = "tests/debug/debug_thumbnail_cli.rs"
+required-features = ["debug-tools"]
+
+[[bin]]
+name = "download_thumbnails_for_review"
+path = "tests/debug/download_thumbnails_for_review.rs"
+required-features = ["debug-tools"]
+
+[[bin]]
+name = "debug_facebook_parsing"
+path = "tests/debug/debug_facebook_parsing.rs"
+required-features = ["debug-tools"]
+
+[[bin]]
+name = "debug_response_format"
+path = "tests/debug/debug_response_format.rs"
+required-features = ["debug-tools"]
+
+[[bin]]
+name = "debug_metadata_patterns"
+path = "tests/debug/debug_metadata_patterns.rs"
+required-features = ["debug-tools"]
+
+[[bin]]
+name = "debug_specific_failing_urls"
+path = "tests/debug/debug_specific_failing_urls.rs"
+required-features = ["debug-tools"]
+
+[[bin]]
+name = "debug_app_failures"
+path = "tests/debug/debug_app_failures.rs"
+required-features = ["debug-tools"]
+
+
+
+[features]
+default = []
+debug-tools = ["facebook-video-downloader-core", "tokio", "reqwest", "env_logger", "regex"]
+
+[dependencies]
+leptos = { version = "0.8.2", features = ["csr", "nightly"] }
+leptos_router = "0.8.2"
+wasm-bindgen = "0.2.95"
+web-sys = { version = "0.3", features = ["HtmlSelectElement"] }
+js-sys = "0.3"
+serde = { workspace = true }
+serde_json = { workspace = true }
+wasm-bindgen-futures = "0.4.45"
+gloo = "0.11"
+gloo-net = "0.6"
+console_error_panic_hook = "0.1"
+console_log = "0.2"
+log = "0.4"
+uuid = { workspace = true }
+regex = { version = "1.0", optional = true }
+serde-wasm-bindgen = "0.6"
+gloo-events = "0.2.0"
+gloo-utils = "0.2.0"
+chrono = { workspace = true, features = ["wasm-bindgen"] }
+
+# Only include these for test binaries (not WASM)
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+facebook-video-downloader-core = { path = "crates/core", optional = true }
+tokio = { workspace = true, optional = true }
+reqwest = { workspace = true, optional = true }
+base64 = { workspace = true }
+chrono = { workspace = true }
+bytes = "1.0"
+flate2 = "1.0"
+futures = "0.3"
+env_logger = { version = "0.10", optional = true }
+
+[workspace]
+members = [
+    "src-tauri",
+    "crates/core",
+    "crates/cli",
+    "crates/ui"
+]
+resolver = "2"
+
+[workspace.dependencies]
+# Shared dependencies across workspace
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tokio = { version = "1.0", features = ["full"] }
+reqwest = { version = "0.12", features = ["json", "stream"] }
+regex = "1.0"
+base64 = "0.22"
+chrono = { version = "0.4", features = ["serde"] }
+thiserror = "1.0"
+tracing = "0.1"
+uuid = { version = "1.0", features = ["v4", "js"] }
+anyhow = "1.0"
+clap = { version = "4.0", features = ["derive"] }
+tracing-subscriber = "0.3"
+
+[profile.release]
+# Optimize for size and performance
+opt-level = "s"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
+
+[profile.dev]
+# Optimized for fastest compilation
+opt-level = 0
+debug = 1  # Reduced debug info for faster builds
+codegen-units = 256  # Maximum parallelization
+incremental = true
+overflow-checks = false  # Disable for speed
+panic = "abort"  # Faster than unwinding
+
+# Fast development profile with some optimization
+[profile.dev-fast]
+inherits = "dev"
+opt-level = 1
+debug = 1
+codegen-units = 16

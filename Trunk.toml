@@ -1,0 +1,82 @@
+[build]
+# The index HTML file to drive the bundling process.
+target = "index.html"
+# Specify which Rust target to build
+rust_target = "facebook-video-downloader-frontend"
+
+# Build in release mode.
+release = false
+
+# The output dir for all final assets.
+dist = "dist"
+
+# The public URL from which assets are to be served.
+public_url = "/"
+
+# Whether to include hash values in the output file names.
+filehash = true
+
+# Whether to inject scripts (and module preloads) into the finalized output.
+inject_scripts = true
+
+# Run without network access.
+offline = false
+
+# Require Cargo.lock and cache are up to date.
+frozen = false
+
+# Require Cargo.lock is up to date.
+locked = false
+
+[watch]
+# Paths to watch. The `build.target`'s parent folder is watched by default.
+watch = ["src", "index.html", "src/styles", "tailwind.config.js", "postcss.config.js"]
+
+# Paths to ignore.
+ignore = ["dist", "target"]
+
+# Pre-build hook to process CSS with PostCSS
+[[hooks]]
+stage = "pre_build"
+command = "pnpm"
+command_arguments = ["run", "build:css"]
+
+[serve]
+# The address to serve on.
+address = "127.0.0.1"
+
+# The port to serve on.
+port = 8085
+
+# Open a browser tab once the initial build is complete.
+open = false
+
+# Disable auto-reload of the web app (using Tauri's hot reload instead).
+no_autoreload = true
+
+# Disable the file watcher.
+no_watch = false
+
+# Additional headers to send.
+headers = {}
+
+[clean]
+# The output dir.
+dist = "dist"
+
+# Optionally perform a cargo clean.
+cargo = false
+
+[tools]
+# WASM-bindgen version.
+wasm_bindgen = "0.2.100"
+
+# Disable wasm-opt to avoid download issues
+# wasm_opt = "0.116"
+
+# [proxy]
+# Proxy configuration is not needed for this application
+# If needed in the future, use the correct Trunk proxy format:
+# [[proxy]]
+# backend = "http://localhost:3000/"
+# rewrite = "/api/"

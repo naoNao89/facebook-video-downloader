@@ -1,0 +1,61 @@
+[package]
+name = "facebook-video-downloader-core"
+version = "0.1.0"
+edition = "2021"
+description = "Core extraction and processing library for Facebook video downloader"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/username/facebook-video-downloader"
+
+[dependencies]
+# Workspace dependencies
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+reqwest = { workspace = true }
+regex = { workspace = true }
+base64 = { workspace = true }
+chrono = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+
+# Additional dependencies
+flate2 = "1.0"
+futures = "0.3"
+futures-util = "0.3"
+bytes = "1.0"
+url = "2.4"
+toml = "0.8.22"
+mp4parse = "0.17.0"
+urlencoding = "2.1"
+uuid = { version = "1.0", features = ["v4", "serde"] }
+rand = "0.8"
+clap = { version = "4.0", features = ["derive"] }
+tracing-subscriber = "0.3"
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+# Core test binaries (moved to main project /tests directory)
+[[bin]]
+name = "analyze_current_patterns"
+path = "../../tests/core/analyze_current_patterns.rs"
+
+[[bin]]
+name = "analyze_facebook_html"
+path = "../../tests/core/analyze_facebook_html.rs"
+
+[[bin]]
+name = "comprehensive_pattern_test"
+path = "../../tests/core/comprehensive_pattern_test.rs"
+
+[[bin]]
+name = "test_no_compression"
+path = "../../tests/core/test_no_compression.rs"
+
+[features]
+default = ["ffmpeg"]
+ffmpeg = []
+
+[dev-dependencies]
+mp4parse = "0.17.0"
+tokio-test = "0.4.4"

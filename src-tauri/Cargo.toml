@@ -1,0 +1,50 @@
+[package]
+name = "facebook-video-downloader"
+version = "0.1.0"
+description = "A powerful Facebook video downloader built with Tauri"
+authors = ["Your Name <your.email@example.com>"]
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/username/facebook-video-downloader"
+edition = "2021"
+
+[build-dependencies]
+tauri-build = { version = "2.2.0", features = [] }
+
+[dependencies]
+# Tauri dependencies
+tauri = { version = "2.2.0", features = ["wry"] }
+tauri-plugin-shell = "2.2.1"
+tauri-plugin-dialog = "2.2.1"
+tauri-plugin-fs = "2.2.1"
+tauri-plugin-http = "2.2.1"
+tauri-plugin-notification = "2.2.1"
+tauri-plugin-os = "2.2.1"
+tauri-plugin-process = "2.2.1"
+tauri-plugin-window-state = "2.2.1"
+tauri-plugin-clipboard-manager = "2.2.2"
+
+# Workspace dependencies
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+reqwest = { workspace = true }
+regex = { workspace = true }
+base64 = { workspace = true }
+chrono = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+uuid = { version = "1.0", features = ["v4"] }
+
+# Additional dependencies
+tracing-subscriber = "0.3"
+dirs = "5.0"
+flate2 = "1.0"
+futures = "0.3"
+bytes = "1.0"
+
+# Local dependencies
+facebook-video-downloader-core = { path = "../crates/core" }
+num_cpus = "1.17.0"
+
+[features]
+default = []

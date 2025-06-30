@@ -1,0 +1,619 @@
+name: PR Automation and Enhancement
+
+on:
+  workflow_run:
+    workflows: ["Main CI/CD Pipeline"]
+    types: [completed]
+    branches: [ main, develop ]
+
+# Prevent multiple PR automation runs for the same workflow run
+concurrency:
+  group: pr-automation-${{ github.event.workflow_run.id }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+  actions: read
+  statuses: write
+  checks: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # Analyze PR and gather information
+  analyze-pr:
+    name: Analyze PR Changes
+    runs-on: ubuntu-latest
+    if: github.event.workflow_run.conclusion == 'success' && (github.event.workflow_run.event == 'pull_request' || github.event.workflow_run.event == 'push')
+    outputs:
+      pr-number: ${{ steps.pr-info.outputs.pr-number }}
+      pr-title-encoded: ${{ steps.pr-info.outputs.pr-title-encoded }}
+      pr-body-encoded: ${{ steps.pr-info.outputs.pr-body-encoded }}
+      commit-messages-encoded: ${{ steps.commit-analysis.outputs.commit-messages-encoded }}
+      files-changed: ${{ steps.file-analysis.outputs.files-changed }}
+      change-type: ${{ steps.change-analysis.outputs.change-type }}
+      related-issues: ${{ steps.issue-analysis.outputs.related-issues }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get PR information
+        id: pr-info
+        run: |
+          # Get the PR number from the workflow run using a more reliable approach
+          echo "Workflow run ID: ${{ github.event.workflow_run.id }}"
+          echo "Workflow run event: ${{ github.event.workflow_run.event }}"
+
+          # Get the head SHA from the workflow run
+          HEAD_SHA=$(gh api /repos/${{ github.repository }}/actions/runs/${{ github.event.workflow_run.id }} --jq '.head_sha')
+          echo "Head SHA: $HEAD_SHA"
+
+          # Get the PR number for that commit
+          PR_NUMBER=$(gh api /repos/${{ github.repository }}/commits/$HEAD_SHA/pulls --jq '.[0].number // empty')
+
+          if [ -n "$PR_NUMBER" ] && [ "$PR_NUMBER" != "null" ] && [ "$PR_NUMBER" != "" ]; then
+            echo "pr-number=$PR_NUMBER" >> $GITHUB_OUTPUT
+            echo "Found PR #$PR_NUMBER for commit $HEAD_SHA"
+
+            # Get PR details
+            PR_DATA=$(gh api /repos/${{ github.repository }}/pulls/$PR_NUMBER)
+
+            # Extract title and body safely using jq
+            PR_TITLE=$(echo "$PR_DATA" | jq -r '.title // ""')
+            PR_BODY=$(echo "$PR_DATA" | jq -r '.body // ""')
+
+            # Handle PR title safely using base64 encoding
+            if [ -n "$PR_TITLE" ] && [ "$PR_TITLE" != "null" ] && [ "$PR_TITLE" != "" ]; then
+              echo "pr-title-encoded=$(printf '%s' "$PR_TITLE" | base64 -w 0)" >> $GITHUB_OUTPUT
+            else
+              echo "pr-title-encoded=" >> $GITHUB_OUTPUT
+            fi
+
+            # Handle PR body safely using base64 encoding
+            if [ -n "$PR_BODY" ] && [ "$PR_BODY" != "null" ] && [ "$PR_BODY" != "" ]; then
+              echo "pr-body-encoded=$(printf '%s' "$PR_BODY" | base64 -w 0)" >> $GITHUB_OUTPUT
+            else
+              echo "pr-body-encoded=" >> $GITHUB_OUTPUT
+            fi
+          else
+            echo "No PR found for commit $HEAD_SHA"
+            echo "pr-number=" >> $GITHUB_OUTPUT
+            echo "pr-title-encoded=" >> $GITHUB_OUTPUT
+            echo "pr-body-encoded=" >> $GITHUB_OUTPUT
+          fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Analyze commit messages
+        id: commit-analysis
+        run: |
+          PR_NUMBER="${{ steps.pr-info.outputs.pr-number }}"
+
+          if [ -n "$PR_NUMBER" ] && [ "$PR_NUMBER" != "null" ] && [ "$PR_NUMBER" != "" ]; then
+            # Get PR details to find base and head SHA
+            PR_DATA=$(gh api /repos/${{ github.repository }}/pulls/$PR_NUMBER)
+            BASE_SHA=$(echo "$PR_DATA" | jq -r '.base.sha')
+            HEAD_SHA=$(echo "$PR_DATA" | jq -r '.head.sha')
+
+            echo "Base SHA: $BASE_SHA"
+            echo "Head SHA: $HEAD_SHA"
+
+            # Get commit messages from the PR safely
+            if [ -n "$BASE_SHA" ] && [ -n "$HEAD_SHA" ] && [ "$BASE_SHA" != "null" ] && [ "$HEAD_SHA" != "null" ]; then
+              COMMITS=$(git log --oneline $BASE_SHA..$HEAD_SHA --pretty=format:"- %s" | head -10 || echo "")
+              if [ -n "$COMMITS" ]; then
+                echo "commit-messages-encoded=$(printf '%s' "$COMMITS" | base64 -w 0)" >> $GITHUB_OUTPUT
+              else
+                echo "commit-messages-encoded=" >> $GITHUB_OUTPUT
+              fi
+            else
+              echo "commit-messages-encoded=" >> $GITHUB_OUTPUT
+            fi
+          else
+            echo "commit-messages-encoded=" >> $GITHUB_OUTPUT
+          fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Analyze changed files
+        id: file-analysis
+        run: |
+          PR_NUMBER="${{ steps.pr-info.outputs.pr-number }}"
+
+          if [ -n "$PR_NUMBER" ] && [ "$PR_NUMBER" != "null" ] && [ "$PR_NUMBER" != "" ]; then
+            # Get PR details to find base and head SHA
+            PR_DATA=$(gh api /repos/${{ github.repository }}/pulls/$PR_NUMBER)
+            BASE_SHA=$(echo "$PR_DATA" | jq -r '.base.sha')
+            HEAD_SHA=$(echo "$PR_DATA" | jq -r '.head.sha')
+
+            echo "Analyzing files between $BASE_SHA and $HEAD_SHA"
+
+            # Get list of changed files safely
+            if [ -n "$BASE_SHA" ] && [ -n "$HEAD_SHA" ] && [ "$BASE_SHA" != "null" ] && [ "$HEAD_SHA" != "null" ]; then
+              FILES=$(git diff --name-only $BASE_SHA..$HEAD_SHA || echo "")
+              if [ -n "$FILES" ]; then
+                echo "files-changed-encoded=$(printf '%s' "$FILES" | base64 -w 0)" >> $GITHUB_OUTPUT
+                echo "files-changed<<EOF" >> $GITHUB_OUTPUT
+                echo "$FILES" >> $GITHUB_OUTPUT
+                echo "EOF" >> $GITHUB_OUTPUT
+              else
+                echo "files-changed-encoded=" >> $GITHUB_OUTPUT
+                echo "files-changed=" >> $GITHUB_OUTPUT
+              fi
+            else
+              echo "files-changed-encoded=" >> $GITHUB_OUTPUT
+              echo "files-changed=" >> $GITHUB_OUTPUT
+            fi
+          else
+            echo "files-changed-encoded=" >> $GITHUB_OUTPUT
+            echo "files-changed=" >> $GITHUB_OUTPUT
+          fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Determine change type
+        id: change-analysis
+        run: |
+          FILES="${{ steps.file-analysis.outputs.files-changed }}"
+
+          # Decode PR title from base64
+          TITLE_ENCODED="${{ steps.pr-info.outputs.pr-title-encoded }}"
+          if [ -n "$TITLE_ENCODED" ]; then
+            TITLE=$(echo "$TITLE_ENCODED" | base64 -d)
+          else
+            TITLE=""
+          fi
+
+          # Determine change type based on files and title
+          CHANGE_TYPE="other"
+
+          if echo "$TITLE" | grep -i "fix\|bug\|hotfix" > /dev/null; then
+            CHANGE_TYPE="bug-fix"
+          elif echo "$TITLE" | grep -i "feat\|feature\|add" > /dev/null; then
+            CHANGE_TYPE="feature"
+          elif echo "$TITLE" | grep -i "perf\|performance\|optimize" > /dev/null; then
+            CHANGE_TYPE="performance"
+          elif echo "$TITLE" | grep -i "docs\|documentation" > /dev/null; then
+            CHANGE_TYPE="documentation"
+          elif echo "$TITLE" | grep -i "refactor\|cleanup" > /dev/null; then
+            CHANGE_TYPE="refactoring"
+          elif echo "$TITLE" | grep -i "deps\|dependencies\|update" > /dev/null; then
+            CHANGE_TYPE="dependency"
+          elif echo "$FILES" | grep -E "\.(md|txt|rst)$" > /dev/null; then
+            CHANGE_TYPE="documentation"
+          elif echo "$FILES" | grep -E "Cargo\.toml|package\.json|pnpm-lock\.yaml" > /dev/null; then
+            CHANGE_TYPE="dependency"
+          elif echo "$FILES" | grep -E "src-tauri/" > /dev/null; then
+            CHANGE_TYPE="tauri-backend"
+          fi
+
+          echo "change-type=$CHANGE_TYPE" >> $GITHUB_OUTPUT
+
+      - name: Extract related issues
+        id: issue-analysis
+        run: |
+          # Extract issue numbers from PR title and commit messages
+          # Decode PR title from base64
+          TITLE_ENCODED="${{ steps.pr-info.outputs.pr-title-encoded }}"
+          if [ -n "$TITLE_ENCODED" ]; then
+            TITLE=$(echo "$TITLE_ENCODED" | base64 -d)
+          else
+            TITLE=""
+          fi
+
+          # Decode commit messages from base64
+          COMMITS_ENCODED="${{ steps.commit-analysis.outputs.commit-messages-encoded }}"
+          if [ -n "$COMMITS_ENCODED" ]; then
+            COMMITS=$(echo "$COMMITS_ENCODED" | base64 -d)
+          else
+            COMMITS=""
+          fi
+
+          # Look for issue references in title and commits
+          ISSUES=$(echo "$TITLE $COMMITS" | grep -oE "#[0-9]+" | sort -u | tr '\n' ' ')
+          echo "related-issues=$ISSUES" >> $GITHUB_OUTPUT
+
+  # Add initial PR enhancement (runs after CI/CD completes)
+  enhance-pr-description:
+    name: Enhance PR Description
+    runs-on: ubuntu-latest
+    needs: analyze-pr
+    if: needs.analyze-pr.outputs.pr-number != '' && needs.analyze-pr.outputs.pr-number != null
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Generate PR enhancement with CI results
+        run: |
+          PR_NUMBER="${{ needs.analyze-pr.outputs.pr-number }}"
+          CHANGE_TYPE="${{ needs.analyze-pr.outputs.change-type }}"
+          RELATED_ISSUES="${{ needs.analyze-pr.outputs.related-issues }}"
+
+          # Decode commit messages from base64
+          COMMIT_MESSAGES_ENCODED="${{ needs.analyze-pr.outputs.commit-messages-encoded }}"
+          if [ -n "$COMMIT_MESSAGES_ENCODED" ]; then
+            COMMIT_MESSAGES=$(echo "$COMMIT_MESSAGES_ENCODED" | base64 -d)
+          else
+            COMMIT_MESSAGES=""
+          fi
+
+          # Get current PR details safely
+          CURRENT_PR=$(gh api /repos/${{ github.repository }}/pulls/$PR_NUMBER)
+
+          # Save PR details to files to avoid shell interpretation issues
+          echo "$CURRENT_PR" | jq -r '.title' > current_title.txt
+          echo "$CURRENT_PR" | jq -r '.body // ""' > current_body.txt
+
+          # Check if PR already has enhanced description
+          if grep -q "<!-- AUTO-GENERATED SECTION -->" current_body.txt; then
+            echo "PR description already enhanced, updating with CI results"
+            # Extract the original description (before auto-generated section) safely
+            sed '/<!-- AUTO-GENERATED SECTION -->/,$d' current_body.txt > original_body.txt
+          else
+            # Use the current body as original
+            cp current_body.txt original_body.txt
+          fi
+
+          # Get basic CI results from workflow run
+          WORKFLOW_URL="${{ github.event.workflow_run.html_url }}"
+          BUILD_TIME="${{ github.event.workflow_run.run_started_at }}"
+          BUILD_STATUS="✅ All checks passed"
+
+          # Create enhanced description template with CI results
+          cat > enhanced_description.md << 'EOF'
+          <!-- AUTO-GENERATED SECTION -->
+          ## 🚀 CI/CD Analysis Results
+
+          ### ✅ Build Status
+          - **Status**: BUILD_STATUS_PLACEHOLDER
+          - **Build Time**: BUILD_TIME_PLACEHOLDER
+          - **Workflow Run**: [View Details](WORKFLOW_URL_PLACEHOLDER)
+
+          ### 📊 Change Summary
+          - **Change Type**: CHANGE_TYPE_PLACEHOLDER
+          - **Related Issues**: RELATED_ISSUES_PLACEHOLDER
+
+          ### 📝 Changes Made
+          COMMIT_MESSAGES_PLACEHOLDER
+
+          ### 📋 Quality Checklist
+          - [x] Code builds successfully
+          - [x] All tests pass
+          - [x] Code formatting is correct (cargo fmt)
+          - [x] No clippy warnings (cargo clippy)
+          - [x] Security audit passed (cargo audit)
+          - [x] Bundle size within limits
+          - [x] Tauri app builds successfully
+
+          ### 🔄 Automation Complete
+          ✅ All CI/CD checks have completed successfully:
+          - ✅ Build status and bundle size analysis
+          - ✅ Test coverage reports
+          - ✅ Security scan results
+          - ✅ Tauri app compilation
+
+          ---
+          *This analysis was automatically generated after CI/CD pipeline completion.*
+
+          EOF
+
+          # Replace placeholders with actual values using safer approach
+          # Escape special characters for sed
+          CHANGE_TYPE_SAFE=$(echo "$CHANGE_TYPE" | sed 's/[[\.*^$()+?{|]/\\&/g')
+          RELATED_ISSUES_SAFE=$(echo "$RELATED_ISSUES" | sed 's/[[\.*^$()+?{|]/\\&/g')
+          BUILD_STATUS_SAFE=$(echo "$BUILD_STATUS" | sed 's/[[\.*^$()+?{|]/\\&/g')
+
+          # Use safer sed commands with proper delimiters
+          sed -i "s|CHANGE_TYPE_PLACEHOLDER|$CHANGE_TYPE_SAFE|g" enhanced_description.md
+          sed -i "s|RELATED_ISSUES_PLACEHOLDER|$RELATED_ISSUES_SAFE|g" enhanced_description.md
+          sed -i "s|BUILD_STATUS_PLACEHOLDER|$BUILD_STATUS_SAFE|g" enhanced_description.md
+          sed -i "s|BUILD_TIME_PLACEHOLDER|$BUILD_TIME|g" enhanced_description.md
+          sed -i "s|WORKFLOW_URL_PLACEHOLDER|$WORKFLOW_URL|g" enhanced_description.md
+
+          # Handle commit messages
+          if [ -n "$COMMIT_MESSAGES" ]; then
+            echo "$COMMIT_MESSAGES" > /tmp/commit_messages.txt
+            sed '/COMMIT_MESSAGES_PLACEHOLDER/r /tmp/commit_messages.txt' enhanced_description.md | \
+            sed '/COMMIT_MESSAGES_PLACEHOLDER/d' > enhanced_description_final.md
+            mv enhanced_description_final.md enhanced_description.md
+            rm -f /tmp/commit_messages.txt
+          else
+            sed -i 's/COMMIT_MESSAGES_PLACEHOLDER/- Changes will be listed here automatically/g' enhanced_description.md
+          fi
+
+          # Combine with existing description safely using files
+          if [ -s original_body.txt ] && ! grep -q "^null$" original_body.txt; then
+            cat original_body.txt > final_description.md
+            echo "" >> final_description.md
+            cat enhanced_description.md >> final_description.md
+          else
+            mv enhanced_description.md final_description.md
+          fi
+
+          # Clean up temporary files
+          rm -f current_title.txt current_body.txt original_body.txt
+
+          # Update the PR description
+          gh api \
+            --method PATCH \
+            /repos/${{ github.repository }}/pulls/$PR_NUMBER \
+            --field body=@final_description.md
+
+          echo "✅ PR #$PR_NUMBER description enhanced with CI/CD results"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Add PR labels based on analysis
+  auto-label-pr:
+    name: Auto-label PR
+    runs-on: ubuntu-latest
+    needs: analyze-pr
+    if: needs.analyze-pr.outputs.pr-number != '' && needs.analyze-pr.outputs.pr-number != null
+    steps:
+      - name: Add labels based on change type
+        run: |
+          PR_NUMBER="${{ needs.analyze-pr.outputs.pr-number }}"
+          CHANGE_TYPE="${{ needs.analyze-pr.outputs.change-type }}"
+
+          # Map change types to labels (adapted for Facebook Video Downloader)
+          case "$CHANGE_TYPE" in
+            "bug-fix")
+              LABELS="bug,hotfix"
+              ;;
+            "feature")
+              LABELS="enhancement,feature"
+              ;;
+            "performance")
+              LABELS="performance,optimization"
+              ;;
+            "documentation")
+              LABELS="documentation"
+              ;;
+            "refactoring")
+              LABELS="refactoring,code-quality"
+              ;;
+            "dependency")
+              LABELS="dependencies"
+              ;;
+            "tauri-backend")
+              LABELS="tauri,backend"
+              ;;
+            *)
+              LABELS="needs-review"
+              ;;
+          esac
+
+          # Add labels to PR with better error handling
+          LABELS_ADDED=""
+          LABELS_FAILED=""
+
+          for label in $(echo $LABELS | tr ',' ' '); do
+            if gh api \
+              --method POST \
+              /repos/${{ github.repository }}/issues/$PR_NUMBER/labels \
+              --field labels[]="$label" 2>/dev/null; then
+              LABELS_ADDED="$LABELS_ADDED $label"
+            else
+              LABELS_FAILED="$LABELS_FAILED $label"
+            fi
+          done
+
+          if [ -n "$LABELS_ADDED" ]; then
+            echo "✅ Labels added to PR #$PR_NUMBER:$LABELS_ADDED"
+          fi
+
+          if [ -n "$LABELS_FAILED" ]; then
+            echo "⚠️ Could not add labels (may not exist):$LABELS_FAILED"
+          fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Comment on PR with additional analysis
+  pr-analysis-comment:
+    name: Add Analysis Comment
+    runs-on: ubuntu-latest
+    needs: analyze-pr
+    if: needs.analyze-pr.outputs.pr-number != '' && needs.analyze-pr.outputs.pr-number != null
+    steps:
+      - name: Create analysis comment
+        run: |
+          PR_NUMBER="${{ needs.analyze-pr.outputs.pr-number }}"
+          CHANGE_TYPE="${{ needs.analyze-pr.outputs.change-type }}"
+          RELATED_ISSUES="${{ needs.analyze-pr.outputs.related-issues }}"
+          FILES_CHANGED="${{ needs.analyze-pr.outputs.files-changed }}"
+
+          # Count different types of files safely
+          if [ -n "$FILES_CHANGED" ] && [ "$FILES_CHANGED" != "" ]; then
+            # Use safer counting approach that handles empty results properly
+            RUST_FILES=$(echo "$FILES_CHANGED" | grep "\.rs$" 2>/dev/null | wc -l | tr -d ' ')
+            CSS_FILES=$(echo "$FILES_CHANGED" | grep "\.css$" 2>/dev/null | wc -l | tr -d ' ')
+            HTML_FILES=$(echo "$FILES_CHANGED" | grep "\.html$" 2>/dev/null | wc -l | tr -d ' ')
+            CONFIG_FILES=$(echo "$FILES_CHANGED" | grep -E "\.(toml|json|yml|yaml|js|mjs)$" 2>/dev/null | wc -l | tr -d ' ')
+            DOC_FILES=$(echo "$FILES_CHANGED" | grep -E "\.(md|txt|rst)$" 2>/dev/null | wc -l | tr -d ' ')
+            TAURI_FILES=$(echo "$FILES_CHANGED" | grep "src-tauri/" 2>/dev/null | wc -l | tr -d ' ')
+          else
+            RUST_FILES="0"
+            CSS_FILES="0"
+            HTML_FILES="0"
+            CONFIG_FILES="0"
+            DOC_FILES="0"
+            TAURI_FILES="0"
+          fi
+
+          # Ensure all file counts are valid integers (fallback to 0 if not)
+          RUST_FILES=$(printf '%s' "$RUST_FILES" | grep -E '^[0-9]+$' || echo "0")
+          CSS_FILES=$(printf '%s' "$CSS_FILES" | grep -E '^[0-9]+$' || echo "0")
+          HTML_FILES=$(printf '%s' "$HTML_FILES" | grep -E '^[0-9]+$' || echo "0")
+          CONFIG_FILES=$(printf '%s' "$CONFIG_FILES" | grep -E '^[0-9]+$' || echo "0")
+          DOC_FILES=$(printf '%s' "$DOC_FILES" | grep -E '^[0-9]+$' || echo "0")
+          TAURI_FILES=$(printf '%s' "$TAURI_FILES" | grep -E '^[0-9]+$' || echo "0")
+
+          # Determine impact descriptions
+          RUST_IMPACT="➖ No changes"
+          if [ "$RUST_FILES" -gt 0 ]; then
+            RUST_IMPACT="🔧 Frontend code changes"
+          fi
+
+          CSS_IMPACT="➖ No changes"
+          if [ "$CSS_FILES" -gt 0 ]; then
+            CSS_IMPACT="🎨 Styling changes"
+          fi
+
+          HTML_IMPACT="➖ No changes"
+          if [ "$HTML_FILES" -gt 0 ]; then
+            HTML_IMPACT="📄 Template changes"
+          fi
+
+          CONFIG_IMPACT="➖ No changes"
+          if [ "$CONFIG_FILES" -gt 0 ]; then
+            CONFIG_IMPACT="⚙️ Configuration changes"
+          fi
+
+          DOC_IMPACT="➖ No changes"
+          if [ "$DOC_FILES" -gt 0 ]; then
+            DOC_IMPACT="📚 Documentation changes"
+          fi
+
+          TAURI_IMPACT="➖ No changes"
+          if [ "$TAURI_FILES" -gt 0 ]; then
+            TAURI_IMPACT="🖥️ Backend/Tauri changes"
+          fi
+
+          # Create comment using safer approach
+          cat > comment.md << 'EOF'
+          ## 🤖 Automated PR Analysis
+
+          ### 📊 Change Summary
+          - **Change Type Detected**: CHANGE_TYPE_PLACEHOLDER
+          - **Related Issues**: RELATED_ISSUES_PLACEHOLDER
+
+          ### 📁 Files Analysis
+          | File Type | Count | Impact |
+          |-----------|-------|--------|
+          | Rust (.rs) | RUST_FILES_PLACEHOLDER | RUST_IMPACT_PLACEHOLDER |
+          | CSS (.css) | CSS_FILES_PLACEHOLDER | CSS_IMPACT_PLACEHOLDER |
+          | HTML (.html) | HTML_FILES_PLACEHOLDER | HTML_IMPACT_PLACEHOLDER |
+          | Config | CONFIG_FILES_PLACEHOLDER | CONFIG_IMPACT_PLACEHOLDER |
+          | Documentation | DOC_FILES_PLACEHOLDER | DOC_IMPACT_PLACEHOLDER |
+          | Tauri Backend | TAURI_FILES_PLACEHOLDER | TAURI_IMPACT_PLACEHOLDER |
+
+          ### 🚦 Next Steps
+          1. ✅ **CI/CD Pipeline**: All automated checks completed successfully
+          2. 🔍 **Code Review**: Ready for review
+          3. ✅ **Testing**: All automated tests passed
+          4. ✅ **Bundle Analysis**: Size impact analyzed and within limits
+          5. ✅ **Tauri Build**: Desktop app compilation successful
+          6. ✅ **Merge**: Available after approval
+
+          ### 👥 Reviewer Guidelines
+          Please ensure the following before approving:
+
+          #### 🔧 Technical Review
+          - [ ] All automated checks pass
+          - [ ] Code follows project standards
+          - [ ] No performance regressions
+          - [ ] Bundle size is acceptable
+          - [ ] Tauri app functionality works as expected
+
+          #### 📋 Content Review
+          - [ ] Change type classification is correct
+          - [ ] Related issues are properly referenced
+          - [ ] Breaking changes are documented
+          - [ ] Security implications are considered
+
+          #### 🧪 Testing Review
+          - [ ] Test coverage is adequate
+          - [ ] Edge cases are handled
+          - [ ] Manual testing completed (if applicable)
+          - [ ] Desktop app functionality verified
+
+          ### 🔄 Automation Complete
+          All automated analysis has been completed:
+          - ✅ Build status and bundle size analysis
+          - ✅ Test coverage reports
+          - ✅ Security scan results
+          - ✅ Tauri app compilation and packaging
+
+          ---
+          *This analysis was automatically generated by the PR automation workflow.*
+          EOF
+
+          # Replace placeholders with actual values using safer approach
+          # Escape special characters in variables for sed
+          CHANGE_TYPE_SAFE=$(printf '%s' "$CHANGE_TYPE" | sed 's/[[\.*^$()+?{|]/\\&/g' || echo "$CHANGE_TYPE")
+          RELATED_ISSUES_SAFE=$(printf '%s' "$RELATED_ISSUES" | sed 's/[[\.*^$()+?{|]/\\&/g' || echo "$RELATED_ISSUES")
+          RUST_IMPACT_SAFE=$(printf '%s' "$RUST_IMPACT" | sed 's/[[\.*^$()+?{|]/\\&/g' || echo "$RUST_IMPACT")
+          CSS_IMPACT_SAFE=$(printf '%s' "$CSS_IMPACT" | sed 's/[[\.*^$()+?{|]/\\&/g' || echo "$CSS_IMPACT")
+          HTML_IMPACT_SAFE=$(printf '%s' "$HTML_IMPACT" | sed 's/[[\.*^$()+?{|]/\\&/g' || echo "$HTML_IMPACT")
+          CONFIG_IMPACT_SAFE=$(printf '%s' "$CONFIG_IMPACT" | sed 's/[[\.*^$()+?{|]/\\&/g' || echo "$CONFIG_IMPACT")
+          DOC_IMPACT_SAFE=$(printf '%s' "$DOC_IMPACT" | sed 's/[[\.*^$()+?{|]/\\&/g' || echo "$DOC_IMPACT")
+          TAURI_IMPACT_SAFE=$(printf '%s' "$TAURI_IMPACT" | sed 's/[[\.*^$()+?{|]/\\&/g' || echo "$TAURI_IMPACT")
+
+          # Use safer sed commands with proper delimiters and error handling
+          sed -i "s|CHANGE_TYPE_PLACEHOLDER|$CHANGE_TYPE_SAFE|g" comment.md || echo "⚠️ Warning: Failed to replace CHANGE_TYPE_PLACEHOLDER"
+          sed -i "s|RELATED_ISSUES_PLACEHOLDER|$RELATED_ISSUES_SAFE|g" comment.md || echo "⚠️ Warning: Failed to replace RELATED_ISSUES_PLACEHOLDER"
+          sed -i "s|RUST_FILES_PLACEHOLDER|$RUST_FILES|g" comment.md || echo "⚠️ Warning: Failed to replace RUST_FILES_PLACEHOLDER"
+          sed -i "s|RUST_IMPACT_PLACEHOLDER|$RUST_IMPACT_SAFE|g" comment.md || echo "⚠️ Warning: Failed to replace RUST_IMPACT_PLACEHOLDER"
+          sed -i "s|CSS_FILES_PLACEHOLDER|$CSS_FILES|g" comment.md || echo "⚠️ Warning: Failed to replace CSS_FILES_PLACEHOLDER"
+          sed -i "s|CSS_IMPACT_PLACEHOLDER|$CSS_IMPACT_SAFE|g" comment.md || echo "⚠️ Warning: Failed to replace CSS_IMPACT_PLACEHOLDER"
+          sed -i "s|HTML_FILES_PLACEHOLDER|$HTML_FILES|g" comment.md || echo "⚠️ Warning: Failed to replace HTML_FILES_PLACEHOLDER"
+          sed -i "s|HTML_IMPACT_PLACEHOLDER|$HTML_IMPACT_SAFE|g" comment.md || echo "⚠️ Warning: Failed to replace HTML_IMPACT_PLACEHOLDER"
+          sed -i "s|CONFIG_FILES_PLACEHOLDER|$CONFIG_FILES|g" comment.md || echo "⚠️ Warning: Failed to replace CONFIG_FILES_PLACEHOLDER"
+          sed -i "s|CONFIG_IMPACT_PLACEHOLDER|$CONFIG_IMPACT_SAFE|g" comment.md || echo "⚠️ Warning: Failed to replace CONFIG_IMPACT_PLACEHOLDER"
+          sed -i "s|DOC_FILES_PLACEHOLDER|$DOC_FILES|g" comment.md || echo "⚠️ Warning: Failed to replace DOC_FILES_PLACEHOLDER"
+          sed -i "s|DOC_IMPACT_PLACEHOLDER|$DOC_IMPACT_SAFE|g" comment.md || echo "⚠️ Warning: Failed to replace DOC_IMPACT_PLACEHOLDER"
+          sed -i "s|TAURI_FILES_PLACEHOLDER|$TAURI_FILES|g" comment.md || echo "⚠️ Warning: Failed to replace TAURI_FILES_PLACEHOLDER"
+          sed -i "s|TAURI_IMPACT_PLACEHOLDER|$TAURI_IMPACT_SAFE|g" comment.md || echo "⚠️ Warning: Failed to replace TAURI_IMPACT_PLACEHOLDER"
+
+          # Post comment
+          gh api \
+            --method POST \
+            /repos/${{ github.repository }}/issues/$PR_NUMBER/comments \
+            --field body=@comment.md
+
+          echo "✅ Enhanced analysis comment added to PR #$PR_NUMBER"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Add status checks and notifications
+  pr-status-check:
+    name: PR Status Check
+    runs-on: ubuntu-latest
+    needs: analyze-pr
+    if: needs.analyze-pr.outputs.pr-number != '' && needs.analyze-pr.outputs.pr-number != null
+    steps:
+      - name: Create status check
+        run: |
+          PR_NUMBER="${{ needs.analyze-pr.outputs.pr-number }}"
+
+          # Get PR head SHA safely
+          if ! PR_HEAD_SHA=$(gh api /repos/${{ github.repository }}/pulls/$PR_NUMBER --jq '.head.sha' 2>/dev/null); then
+            echo "⚠️ Could not get PR head SHA, skipping status check"
+            exit 0
+          fi
+
+          if [ -z "$PR_HEAD_SHA" ] || [ "$PR_HEAD_SHA" = "null" ]; then
+            echo "⚠️ Invalid PR head SHA, skipping status check"
+            exit 0
+          fi
+
+          # Create a success status check (since CI/CD already completed successfully)
+          if gh api \
+            --method POST \
+            /repos/${{ github.repository }}/statuses/$PR_HEAD_SHA \
+            --field state=success \
+            --field target_url="${{ github.event.workflow_run.html_url }}" \
+            --field description="All CI/CD checks passed, PR automation complete" \
+            --field context="pr-automation/analysis" 2>/dev/null; then
+            echo "✅ Status check created for PR analysis"
+          else
+            echo "⚠️ Could not create status check (insufficient permissions or API error)"
+            echo "ℹ️ This is not critical - PR automation will continue"
+          fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

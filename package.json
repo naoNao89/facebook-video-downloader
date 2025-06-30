@@ -1,0 +1,70 @@
+{
+  "name": "facebook-video-downloader",
+  "version": "0.1.0",
+  "description": "A powerful Facebook video downloader built with Tauri, Yew, and Tailwind CSS",
+  "main": "index.js",
+  "scripts": {
+    "dev": "./scripts/dev-concurrent.sh",
+    "dev:simple": "tauri dev",
+    "dev:fast": "./scripts/fast-build.sh",
+    "dev:watch": "./scripts/dev-watch.sh",
+    "dev:concurrent": "./scripts/dev-concurrent.sh",
+    "build": "tauri build",
+    "build:frontend": "pnpm run build:wasm && pnpm run build:css",
+    "build:wasm": "CARGO_BUILD_JOBS=8 cargo build --target wasm32-unknown-unknown --release && wasm-bindgen --out-dir dist --target web --no-typescript target/wasm32-unknown-unknown/release/facebook_video_downloader_frontend.wasm",
+    "build:wasm:dev": "CARGO_BUILD_JOBS=8 cargo build --target wasm32-unknown-unknown --profile dev-fast && wasm-bindgen --out-dir dist --target web --no-typescript target/wasm32-unknown-unknown/dev-fast/facebook_video_downloader_frontend.wasm",
+    "build:wasm:fast": "CARGO_BUILD_JOBS=8 cargo build --target wasm32-unknown-unknown --profile dev-fast && wasm-bindgen --out-dir dist --target web --no-typescript target/wasm32-unknown-unknown/dev-fast/facebook_video_downloader_frontend.wasm",
+    "build:css": "postcss src/styles/main.css -o dist/main.css",
+    "watch:css": "postcss src/styles/main.css -o dist/main.css --watch",
+    "watch:frontend": "./scripts/watch-frontend.sh",
+    "watch:wasm": "./scripts/watch-wasm.sh",
+    "tauri": "tauri",
+    "tauri:dev": "CARGO_BUILD_JOBS=8 tauri dev",
+    "tauri:dev:fast": "CARGO_BUILD_JOBS=8 tauri dev",
+    "tauri:build": "tauri build",
+    "tauri:build:debug": "tauri build --debug",
+    "setup": "./scripts/setup-dev.sh",
+    "setup:manual": "pnpm install && cargo install wasm-bindgen-cli && cargo install tauri-cli@^2.0",
+    "build:script": "./scripts/build.sh",
+    "clean": "cargo clean && rm -rf dist node_modules",
+    "clean:fast": "./scripts/fast-build.sh --clean",
+    "test:all": "./scripts/run_tests.sh",
+    "lint": "cargo clippy --all-targets --all-features",
+    "format": "cargo fmt --all",
+    "test": "cargo test --workspace"
+  },
+  "keywords": [
+    "facebook",
+    "video",
+    "downloader",
+    "tauri",
+    "yew",
+    "rust",
+    "desktop"
+  ],
+  "author": "Your Name <your.email@example.com>",
+  "license": "MIT OR Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/username/facebook-video-downloader.git"
+  },
+  "devDependencies": {
+    "@tailwindcss/aspect-ratio": "^0.4.2",
+    "@tailwindcss/forms": "^0.5.10",
+    "@tailwindcss/typography": "^0.5.16",
+    "@tauri-apps/cli": "^2.5.1",
+    "autoprefixer": "^10.4.21",
+    "chokidar-cli": "^3.0.0",
+    "concurrently": "^8.2.2",
+    "nodemon": "^3.0.2",
+    "postcss": "^8.5.4",
+    "postcss-cli": "^11.0.1",
+    "tailwindcss": "^4.1.9",
+    "watchman": "^1.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "pnpm": ">=8.0.0"
+  },
+  "packageManager": "pnpm@8.10.0"
+}
